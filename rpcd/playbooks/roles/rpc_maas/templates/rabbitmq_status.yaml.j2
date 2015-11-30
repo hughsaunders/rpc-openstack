@@ -60,3 +60,11 @@ alarms      :
             if (percentage(metric["rabbitmq_sockets_used"],metric["rabbitmq_sockets_total"]) >= {{ rabbitmq_socket_used_threshold }}) {
                 return new AlarmStatus(CRITICAL, "RabbitMQ sockets is reaching configured limit. Currently above {{ rabbitmq_socket_used_threshold }} % used");
             }
+    rabbitmq_queued_messages_excluding_notifications_alarm_status :
+        label                   : rabbitmq_queued_messages_excluding_notifications_alarm_status--{{ ansible_hostname }}
+        notification_plan_id    : "{{ maas_notification_plan }}"
+        criteria                : |
+            :set consecutiveCount={{ maas_alarm_local_consecutive_count }}
+            if (metric["rabbitmq_queued_messages_excluding_notifications"] >= {{ rabbitmq_queued_messages_excluding_notifications_threshold }}) {
+                return new AlarmStatus(CRITICAL, "RabbitMQ sum of queued messages excluding notifications queues is reaching configured limit. Currently above {{ rabbitmq_queued_messages_excluding_notifications_threshold }}");
+            }

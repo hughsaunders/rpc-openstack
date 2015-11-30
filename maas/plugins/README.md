@@ -275,6 +275,7 @@ connects to an individual member of a rabbit cluster and grabs statistics from t
     metric rabbitmq_proc_total int64 1048576 processes
     metric rabbitmq_proc_used int64 180 processes
     metric rabbitmq_messages int64 0 messages
+    metric rabbitmq_queued_messages_excluding_notifications int64 0 messages
     metric rabbitmq_sockets_total int64 3594 fd
     metric rabbitmq_fd_used int64 24 fd
     metric rabbitmq_mem_used int64 41562432 bytes
