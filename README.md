@@ -4,7 +4,7 @@ Optional add-ons for Rackspace Private Cloud
 # openstack-ansible integration
 
 The rpc-openstack repo includes add-ons for the Rackspace Private Cloud product
-that integrate with the 
+that integrate with the
 [openstack-ansible](https://github.com/openstack/openstack-ansible)
 set of Ansible playbooks and roles.
 These add-ons extend the 'vanilla' OpenStack environment with value-added
@@ -60,7 +60,7 @@ hosts and containers in the deployment using the related plays mentioned
 above.
 * `site.yml` - deploys all the playbooks mentioned here.
 * `verify-maas.yml` - confirms each maas check selected for each host has been
-captured server-side for recording in MaaS and that each chec has at least one 
+captured server-side for recording in MaaS and that each chec has at least one
 alarm configured for it.
 
 # Basic Setup:
@@ -95,9 +95,9 @@ alarm configured for it.
      `cd /opt/rpc-openstack/rpcd/playbooks && openstack-ansible setup-maas.yml`
   3. run the MaaS verify play:
      `cd /opt/rpc-openstack/rpcd/playbooks && openstack-ansible verify-maas.yml`
-     MaaS Verification _may_ fail if executed within the first few moments after 
-     the Setup plays complete as the MaaS service registers checks and alarms 
-     installed on your hosts. If it fails, manually retrying once after a 
+     MaaS Verification _may_ fail if executed within the first few moments after
+     the Setup plays complete as the MaaS service registers checks and alarms
+     installed on your hosts. If it fails, manually retrying once after a
      one minute delay is recommended.
 
 # Environment Variables for deploy.sh
@@ -132,7 +132,7 @@ To run an upgrade of an existing openstack-ansible installation:
 1. Run`scripts/upgrade.sh`.
 
 Please note the following behaviors that are **destructive**:
-    * `/etc/rpc_deploy` will be deprecated and the file structure moved to 
+    * `/etc/rpc_deploy` will be deprecated and the file structure moved to
       `/etc/openstack_deploy`.
 
 # Linting
