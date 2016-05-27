@@ -144,3 +144,5 @@ version specification:
 ```
 ANSIBLE_VERSION='>=2.0' tox -e ansible-lint
 ```
+# Gating
+Automated testing for RPC-Openstack is documented at [docs/Gating.md](docs/Gating.md)
