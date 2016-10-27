@@ -1,0 +1,96 @@
+---
+services:
+  - name: nova
+    config_file: nova.conf
+    sync_command: "nova-manage db sync"
+    group: "nova_api_os_compute"
+    migration_level: 302
+    major_version: 12
+    type: "sqlalchemy-migrate"
+  - name: glance
+    config_file: glance-manage.conf
+    sync_command: "glance-manage db sync"
+    group: "glance_api"
+    migration_level: 42
+    major_version: 12
+    type: "sqlalchemy-migrate"
+  - name: keystone
+    config_file: keystone.conf
+    sync_command: "keystone-manage db_sync"
+    group: "keystone"
+    migration_level: 75
+    major_version: 12
+    type: "sqlalchemy-migrate"
+  - name: heat
+    config_file: heat.conf
+    sync_command: "heat-manage db_sync"
+    group: "heat_api"
+    migration_level: 65
+    major_version: 12
+    type: "sqlalchemy-migrate"
+  - name: cinder
+    config_file: cinder.conf
+    sync_command: "cinder-manage db sync"
+    group: "cinder_api"
+    migration_level: 60
+    major_version: 12
+    type: "sqlalchemy-migrate"
+  - name: neutron
+    config_file: neutron.conf
+    sync_command: "neutron-db-manage upgrade head"
+    group: "neutron_server"
+    migration_level: -1
+    major_version: 12
+    type: "alembic"
+
+  - name: nova
+    config_file: nova.conf
+    sync_command: "nova-manage db sync"
+    group: "nova_api_os_compute"
+    migration_level: 319
+    major_version: 13
+    type: "sqlalchemy-migrate"
+  - name: glance
+    config_file: glance-manage.conf
+    sync_command: "glance-manage db sync"
+    group: "glance_api"
+    migration_level: 44
+    major_version: 13
+    type: "sqlalchemy-migrate"
+  - name: keystone
+    config_file: keystone.conf
+    sync_command: "keystone-manage db_sync"
+    group: "keystone"
+    migration_level: 97
+    major_version: 13
+    type: "sqlalchemy-migrate"
+  - name: heat
+    config_file: heat.conf
+    sync_command: "heat-manage db_sync"
+    group: "heat_api"
+    migration_level: 71
+    major_version: 13
+    type: "sqlalchemy-migrate"
+  - name: cinder
+    config_file: cinder.conf
+    sync_command: "cinder-manage db sync"
+    group: "cinder_api"
+    migration_level: 72
+    major_version: 13
+    type: "sqlalchemy-migrate"
+  - name: neutron
+    config_file: neutron.conf
+    sync_command: "neutron-db-manage upgrade head"
+    group: "neutron_server"
+    migration_level: -1
+    major_version: 13
+    type: "alembic"
+
+
+
+venv_bundle_file: "venv_bundle_12_13.tgz"
+venv_bundle_url: "http://rpc-repo.rackspace.com/venv_bundles/{{ venv_bundle_file }}"
+basedir: "/tmp/multihop_upgrade"
+venvdir: "{{ basedir }}/venv"
+confdir: "{{ basedir }}/conf"
+backupdir: "{{ basedir }}/backups"

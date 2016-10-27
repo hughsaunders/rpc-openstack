@@ -1,0 +1,231 @@
+---
+- include: ../../openstack-ansible/playbooks/lxc-containers-create.yml
+
+- name: Deployment host prep
+  hosts: localhost
+  tasks:
+    - name: Clear tmp dir for storing service conf files
+      file:
+        path: "{{ confdir }}"
+        state: absent
+        force: yes
+    - name: Make tmp dir for storing service conf files
+      file:
+        path: "{{ confdir }}"
+        state: directory
+
+- name: Fetch configs from containers to deployment host
+  hosts: "{{ services|map(attribute='group')|unique|list }}"
+  tasks:
+    - name: Fetch config file
+      fetch:
+        src: "/etc/{{ item.name }}/{{ item.config_file }}"
+        dest: "{{ confdir }}"
+        flat: true
+        validate_checksum: false
+      with_items: "{{ services  }}"
+      when: item.group in group_names
+
+
+- name: Database migration prep
+  hosts: upgrade_container
+  user: root
+  roles:
+    - pip_install
+    - role: galera_client
+      galera_address: "{{ internal_lb_vip_address }}"
+  tasks:
+    - name: create tmp dirs
+      file:
+        path: "{{ item }}"
+        state: directory
+      with_items:
+        - "{{ venvdir }}"
+        - "{{ backupdir }}"
+    - name: create service etc dirs
+      file:
+        path: "{{ item.1 }}/{{ item.0.name }}"
+        state: directory
+      with_nested:
+        - "{{ services }}"
+        -
+          - "/etc"
+          - "/var/log"
+    - name: Push configuration files from deployment host to upgrade container
+      copy:
+        src: "{{ confdir }}/{{ item.config_file }}"
+        dest: "/etc/{{ item.name }}/{{ item.config_file }}"
+      with_items: services
+    - name: download venv bundle
+      get_url:
+        dest: "{{ basedir }}"
+        url: "{{ venv_bundle_url }}"
+    - name: Extract venv bundle
+      shell: "tar xzf {{ venv_bundle_file }} -C {{ venvdir }}"
+      args:
+        chdir: "{{ basedir }}"
+    - name: install container pip packages
+      pip:
+        name: "{{ item }}"
+        state: latest
+        extra_args: "--isolated"
+      with_items:
+        - PyMySQL
+        - mysql-python
+        - "virtualenv-tools"
+
+    - name: Fix virtualenv paths
+      shell: |
+        for major in *
+        do
+          pushd $major
+          for service in *
+          do
+            virtualenv-tools --update-path=auto $service
+          done # end service
+          popd
+        done # end major
+      args:
+        chdir: "{{ venvdir }}"
+        executable: /bin/bash
+
+    - name: list available versions
+      shell: ls -1
+      args:
+        chdir: "{{ venvdir }}"
+      register: ls_major
+
+    - name: install venv pip packages
+      pip:
+        name: "{{ item.2 }}"
+        state: latest
+        extra_args: "--isolated"
+        executable: "{{ venvdir }}/{{ item.0 }}/{{ item.1 }}/bin/pip"
+      with_nested:
+        - "{{ ls_major.stdout_lines }}"
+        - "{{ services|map(attribute='name')|unique|list }}"
+        -
+          - PyMySQL
+          - mysql-python
+
+    - name: get available databases
+      shell: |
+        ( echo "{";
+          mysql -BN -e 'show databases' \
+            |grep -v -e _schema -e mysql \
+            |while read db
+              do
+                v=$(mysql -U $db -BN \
+                    -e 'select max(version) from migrate_version;' \
+                    2>/dev/null
+                )
+                echo '"'$db'":"'$v'",'
+              done
+          echo '"end":"nigh" }'
+        ) | tee /tmp/dbs.json
+      args:
+        executable: /bin/bash
+      register: db_list_cmd
+      changed_when: false
+
+    - name: read db versions json
+      set_fact:
+        db_versions: "{{ db_list_cmd.stdout|from_json }}"
+
+    - name: check if alembic migrations are necessary
+      shell: |
+        . {{ venvdir }}/{{ item.major_version }}*/{{ item.name }}/bin/activate
+
+        neutron-db-manage current \
+          |egrep -v -e '^\s*Running|^INFO|\s*OK|oslo_config'\
+          > /tmp/branches
+
+        # If the current revision can\'t be found in the repo, then the db
+        # is ahead of the repo, so no migration is possible or necessary using
+        # this version of the repo.
+        grep -q "Can't locate revision identified by" /tmp/branches \
+          && {
+            echo "DB ahead of repo"
+            exit 0
+          }
+
+        # If a branch is up to date it will have (head) after it.
+        # So if any of the branches are missing (head) then a migration should
+        # be executed.
+        grep '\(head\)' /tmp/branches > /tmp/heads
+        if [[ $(wc -l </tmp/branches) == $(wc -l </tmp/heads) ]]
+        then
+          # All branches at head, no migrations necessary
+          exit 0
+        else
+          # The database version differs from the repo version for at least
+          # one branch
+          exit 1
+        fi
+      with_items: "{{ services }}"
+      register: alembic_check
+      when: item.type == "alembic"
+      failed_when: false
+      args:
+        executable: /bin/bash
+
+    - name: Run migrations
+      shell: |
+        db_backup(){
+          tag="$1"
+          db="${2:---all-databases}"
+          mysqldump \
+            $db\
+            --add-drop-database\
+            --create-options\
+            --comments\
+            --dump-date\
+            --quick\
+          > /{{backupdir}}/db_dump_${tag}_$(date |tr ' ' _).sql
+        }
+        get_db_version(){
+          mysql \
+            -U {{ item.name }} \
+            -BN \
+            -e 'select version from migrate_version'
+        }
+
+        # activate the venv
+        . {{ venvdir }}/{{ item.major_version }}*/{{ item.name }}/bin/activate
+        db_backup "Pre_{{ item.name }}_{{ item.major_version }}"
+        # run the sync command
+        {{ item.sync_command }}
+        if [[ "{{item.type}}" == "sqlalchemy-migrate" ]]
+        then
+          current_version=$(get_db_version)
+          if [[ $current_version -lt {{ item.migration_level }} ]]
+          then
+            echo "Migration Failed {{ item.name }}/{{ item.major_version }}
+                Current version: $current_version Target:  {{ item.migration_level }}"
+            exit 1
+          fi
+        elif [[ "{{ item.type }}" == "alembic" ]]
+        then
+          if neutron-db-manage current 2>/dev/null \
+            |egrep -v '^\s*Running|^INFO|\s*OK|oslo_config|head'
+          then
+            echo "Alembic Migration Failed {{ item.name }}/{{ item.major_version }}"
+            exit 1
+          fi
+        fi
+      args:
+        executable: /bin/bash
+      with_items: "{{ services }}"
+      when:
+        - item.name in db_versions
+        - |
+          (
+            db_versions[item.name] != ""
+            and item.migration_level|int > db_versions[item.name]|int
+          ) or
+          alembic_check.results
+            |selectattr("changed", "equalto", true)
+            |selectattr("item", "equalto", item)
+            |selectattr("rc", "equalto", 1)
+            |list
+            |length >0
