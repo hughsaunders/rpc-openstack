@@ -18,7 +18,7 @@ def set_status(job, number, state, context){
 * parallel. It builds a sub job, then links that sub-job to the pull request
 * that triggered this build.
 */
-def makeBuildStep(job, parameters, context, trigger){
+def makeBuildStep(job, parameters, context, trigger, pushto){
   return {
     def number = 0
     def state = ""
@@ -58,9 +58,20 @@ def makeBuildStep(job, parameters, context, trigger){
       }catch (e){
         print("Failed to set PR status, error: ${e}")
       } // try
+    }else if(trigger == "periodic"
+             and pushto !=""
+             and state == "success"){
+      print "Attempting to push to ${pushto}"
+      dir("rpc-openstack"){
+        sshagent (credentials['']){
+          sh "git push -f origin HEAD ${pushto}"
+        }
+      }
+
     }else {
         print("Not a PR build, so not updating PR status")
     } // if
+
   } // closure
 } // func
 
@@ -210,7 +221,8 @@ node(){
           aio_job_name(series, "swift", trigger),
           common_params,
           "continuous-integration/jenkins/aio/swift",
-          trigger
+          trigger,
+          ""
       )
     }
     if(env.AIO_SCENARIOS.contains('ceph')){
@@ -218,7 +230,8 @@ node(){
           aio_job_name(series, "ceph", trigger),
           common_params,
           "continuous-integration/jenkins/aio/ceph",
-          trigger
+          trigger,
+          ""
       )
     }
     if (["newton", "master"].contains(series)
@@ -227,7 +240,8 @@ node(){
           aio_job_name(series, "xenial", trigger),
           common_params,
           "continuous-integration/jenkins/aio/xenial",
-          trigger
+          trigger,
+          ""
       )
     }
     if(series == "mitaka" and env.AIO_SCENARIOS.contains('upgrade')){
@@ -235,7 +249,17 @@ node(){
           aio_job_name(series, "upgrade", trigger),
           common_params,
           "continuous-integration/jenkins/aio/upgrade",
-          trigger
+          trigger,
+          ""
+      )
+    }
+    if(series == "master" and trigger == "periodic"){
+      parallel_steps["omna"] = makeBuildStep(
+          'OnMetal_Multi_Node_AIO_master-xenial'
+          common_params,
+          "continuous-integration/jenkins/aio/omna",
+          trigger,
+          "omna_approved"
       )
     }
     parallel parallel_steps
